@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<!-- saved from url=(0040)https://2025.igem.wiki/njtech-china/home -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="https://static.igem.wiki/common/icons/favicons/igem-2022.svg">
+    <link rel="license" href="https://creativecommons.org/licenses/by/4.0/">
+    <title>Biologia</title>
+    <link href="./Diabetes_files/Custom.css" rel="stylesheet">
+</head>
+<body style="display:flex;align-items:center;justify-content:center;">
+    <div class="nn"> 
+      <div style="position:relative;max-width:100vw;max-height:100vh;overflow:hidden;border-radius:10px;">
+         <object type="image/svg+xml" data="./Diabetes_files/mubu3.svg" class="object"> </object>
+        <div class="bottom"></div>
+         
+         
+        
+         <div class="container" style="display: flex;">
+           <div class="log">
+            <img src="./Diabetes_files/log.webp" alt="" style="width:100%;height:100%;object-fit:contain;">
+           </div>
+           <div class="title">
+                <div class="menu-1">
+                    <img src="./Diabetes_files/logo.webp" alt="">
+
+                    <nav id="mainnav" class="nav" aria-label="主导航">
+                    <ul class="items">
+                        <li class="item"><a href="https://matblube.github.io/pipi/">Home</a></li>
+                        <li class="item">
+                            <a>Project</a>
+                            <ul class="dropdown-menu">
+                             <li><a href="https://matblube.github.io/infor/">Description</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                    </nav>
+                </div>
+                <object type="image/svg+xml" data="./Diabetes_files/ti3.svg" class="object-title"> </object>
+           </div>
+           <div class="book"></div>
+        </div>
+      </div>
+     </div>
+
+     <script>
+(() => {
+  // ===== 0) Cache DOM =====
+  const container = document.querySelector('.container');
+  const loader    = document.querySelector('.load');
+  const logo      = document.querySelector('.log');
+  const title     = document.querySelector('.title');   // 包含 menu-1 与 ti3.svg
+  const book      = document.querySelector('.book');
+
+  // ===== 1) 加载：等动画结束再移除 load，避免生硬 setTimeout =====
+  function waitCssEnd(el, timeout = 1500) {
+    return new Promise((resolve) => {
+      let done = false;
+      const off = () => { if (done) return; done = true;
+        el.removeEventListener('animationend', off);
+        el.removeEventListener('transitionend', off);
+        resolve();
+      };
+      el.addEventListener('animationend',  off, { once:true });
+      el.addEventListener('transitionend', off, { once:true });
+      setTimeout(off, timeout); // 兜底
+    });
+  }
+
+  async function hideLoading() {
+    if (!loader) return;
+    loader.classList.add('fade-out'); // 需要你在 CSS 里补 .fade-out（见上）
+    await waitCssEnd(loader);
+    loader.remove();
+  }
+
+  // 延续你原本的“最短 3s + 随机 1~3s”的并行加载逻辑
+  const minDuration = new Promise(res => setTimeout(res, 3000));
+  const dataLoad    = new Promise(res => setTimeout(res, Math.random() * 2000 + 1000));
+  Promise.all([minDuration, dataLoad]).then(async () => {
+    await hideLoading();
+    container.style.display = 'flex'; // 显示容器（logo 的 CSS 会自动淡入）
+  });
+
+  // ===== 2) 两幕状态机：0=开场（logo），1=第一屏（ti3+menu+book） =====
+  let current = 0; // 当前幕
+  let target  = 0; // 目标幕
+  let running = false;
+
+  // rAF 合并滚量，避免高频触发
+  let acc = 0, raf = 0;
+
+
+  function queueDelta(dy) {
+  acc += dy;                 // acc、raf、flushWheel 都是你已有的
+  if (!raf) raf = requestAnimationFrame(flushWheel);
+}
+
+// —— 触摸手势适配（移动端）——
+let touchY0 = 0;
+let lastY = 0;
+
+window.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  touchY0 = lastY = e.touches[0].clientY;
+}, { passive: true }); // start 可以是 passive
+
+window.addEventListener('touchmove', (e) => {
+  if (e.touches.length !== 1) return;
+  // IMPORTANT: iOS 必须 passive:false 才能 preventDefault
+  e.preventDefault();
+  const y = e.touches[0].clientY;
+  const dy = lastY - y;      // 手指上移 => dy>0（等价于 wheel 的 deltaY>0）
+  lastY = y;
+  queueDelta(dy);            // 走同一套阈值与串行翻幕
+}, { passive: false });
+
+window.addEventListener('touchend', () => {
+  touchY0 = lastY = 0;
+}, { passive: true });
+
+
+
+  window.addEventListener('wheel', (e) => {
+    // 页面是“舞台式”固定不滚动：拦截默认滚动
+    e.preventDefault();                          // 你之前没实际调用，导致可能与页面滚动冲突【重点】
+    acc += e.deltaY;
+    if (!raf) raf = requestAnimationFrame(flushWheel);
+  }, { passive: false });
+
+  function flushWheel() {
+    raf = 0;
+    const THRESHOLD = 40;                        // 滚动阈值：越小越敏感，可调
+    if (Math.abs(acc) < THRESHOLD) return (acc = 0);
+    const dir = Math.sign(acc);
+    acc = 0;
+    target = clamp(target + dir, 0, 1);         // 只有两幕：0 或 1
+    if (!running) drive();
+  }
+
+  async function drive() {
+    running = true;
+    while (current !== target) {
+      const next = current + Math.sign(target - current);
+      if (next === 1) {
+        // 进入“第一屏”：logo 淡出，title+book 淡入
+        await fadeOutLogo();
+        await showTitleAndBook();
+      } else {
+        // 回到“开场”：title+book 隐藏，logo 复位（下次还能再淡入）
+        await hideTitleAndBook();
+        await resetLogoIn(); // 让 logo 再次可见（CSS 会再次淡入）
+      }
+      current = next;
+    }
+    running = false;
+  }
+
+  // ===== 3) 具体动作（都 Promise 化，严格串行） =====
+  function fadeOutLogo() {
+    if (!logo) return Promise.resolve();
+    return new Promise((resolve) => {
+      // 使用你已有的“淡出”关键帧 @keyframes fadeIn-log（虽然名字怪，但确实在做淡出） 
+      // 动画在 CSS 里已定义【见下方说明】
+      logo.style.animation = 'fadeIn-log 800ms ease-out forwards';
+      logo.addEventListener('animationend', () => resolve(), { once: true });
+      setTimeout(resolve, 1000); // 兜底
+    });
+  }
+
+  function showTitleAndBook() {
+    // ti3.svg 和 .menu-1 都在 .title 里：显示并淡入
+    if (title) {
+      title.style.display = 'block';
+      // 重新触发一次淡入动画（配合你的 @keyframes fadeIn）
+      title.style.animation = 'none';
+      void title.offsetWidth; // 强制重排
+      title.style.animation = 'fadeIn 600ms ease-out forwards';
+    }
+    if (book) {
+      book.style.display = 'block';
+      book.style.animation = 'none';
+      void book.offsetWidth;
+      book.style.animation = 'fadeIn 600ms ease-out forwards';
+    }
+    return Promise.resolve();
+  }
+
+  function hideTitleAndBook() {
+    if (title) title.style.display = 'none';
+    if (book)  book.style.display  = 'none';
+    return Promise.resolve();
+  }
+
+  function resetLogoIn() {
+    if (!logo) return Promise.resolve();
+    // 清掉上一段动画，交给 CSS 的初始“fadeIn”再次生效
+    logo.style.animation = 'none';
+    void logo.offsetWidth;
+    // 让它再次从透明到不透明
+    logo.style.animation = 'fadeIn 600ms ease-out forwards';
+    return Promise.resolve();
+  }
+
+  // ===== 工具 =====
+  const clamp = (v,a,b) => Math.max(a, Math.min(b,v));
+})();
+</script>
+
+
+
+</body></html>
